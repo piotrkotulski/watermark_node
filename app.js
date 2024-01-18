@@ -66,6 +66,26 @@ const prepareOutputFilename = (filename) => {
     return `${name}-with-watermark.${ext}`;
 };
 
+const editImage = async (inputFile, editType) => {
+    const image = await Jimp.read(inputFile);
+    switch (editType) {
+        case 'make image brighter':
+            image.brightness(0.1);
+            break;
+        case 'increase contrast':
+            image.contrast(0.1);
+            break;
+        case 'make image b&w':
+            image.greyscale();
+            break;
+        case 'invert image':
+            image.invert();
+            break;
+    }
+    await image.writeAsync(inputFile);
+};
+
+
 const startApp = async () => {
     const answer = await inquirer.prompt([{
         name: 'start',
@@ -80,15 +100,45 @@ const startApp = async () => {
         type: 'input',
         message: 'What file do you want to mark?',
         default: 'MojaFota.jpg',
-    }, {
-        name: 'watermarkType',
-        type: 'list',
-        choices: ['Text watermark', 'Image watermark'],
     }]);
 
     try {
-        await checkFileExists('./img/' + options.inputImage);
-        if (options.watermarkType === 'Image watermark') {
+        const inputPath = './img/' + options.inputImage;
+        await checkFileExists(inputPath);
+
+        const editAnswer = await inquirer.prompt([{
+            name: 'edit',
+            type: 'confirm',
+            message: 'Do you want to edit the image before adding a watermark?',
+        }]);
+
+        if (editAnswer.edit) {
+            const editType = await inquirer.prompt([{
+                name: 'type',
+                type: 'list',
+                message: 'Choose the type of modification:',
+                choices: ['make image brighter', 'increase contrast', 'make image b&w', 'invert image'],
+            }]);
+            await editImage(inputPath, editType.type);
+        }
+
+        const watermarkTypeAnswer = await inquirer.prompt([{
+            name: 'watermarkType',
+            type: 'list',
+            choices: ['Text watermark', 'Image watermark'],
+        }]);
+
+        const outputPath = prepareOutputFilename(inputPath);
+
+        if (watermarkTypeAnswer.watermarkType === 'Text watermark') {
+            const text = await inquirer.prompt([{
+                name: 'value',
+                type: 'input',
+                message: 'Type your watermark text:',
+            }])
+            options.watermarkText = text.value;
+            await addTextWatermarkToImage(inputPath, outputPath, options.watermarkText);
+        } else {
             const image = await inquirer.prompt([{
                 name: 'filename',
                 type: 'input',
@@ -96,17 +146,12 @@ const startApp = async () => {
                 default: 'logo.png',
             }])
             options.watermarkImage = image.filename;
-            await checkFileExists('./img/' + options.watermarkImage);
-            addImageWatermarkToImage('./img/' + options.inputImage, './img/' + prepareOutputFilename(options.inputImage), './img/' + options.watermarkImage);
-        } else {
-            const text = await inquirer.prompt([{
-                name: 'value',
-                type: 'input',
-                message: 'Type your watermark text:',
-            }])
-            options.watermarkText = text.value;
-            addTextWatermarkToImage('./img/' + options.inputImage, './img/' + prepareOutputFilename(options.inputImage), options.watermarkText);
+            const watermarkPath = './img/' + options.watermarkImage;
+            await checkFileExists(watermarkPath);
+            await addImageWatermarkToImage(inputPath, outputPath, watermarkPath);
         }
+
+        console.log('All operations completed successfully. Check the output file:', outputPath);
     } catch (error) {
         console.log(error);
         startApp();
@@ -114,7 +159,3 @@ const startApp = async () => {
 };
 
 startApp();
-
-
-
-
